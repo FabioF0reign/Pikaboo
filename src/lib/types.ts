@@ -48,6 +48,8 @@ export type Order = {
   total: number;
   tracking_number: string | null;
   payment_preference: PaymentPreference | null;
+  picked_up_by: string | null;
+  pickup_location: string | null;
   placed_at: string;
 };
 

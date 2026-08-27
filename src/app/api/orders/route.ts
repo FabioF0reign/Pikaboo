@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendNewOrderEmail } from "@/lib/email";
+import { PICKUP_LOCATIONS } from "@/lib/pickupLocations";
 import type { Order, OrderColor, Address, PaymentPreference } from "@/lib/types";
 
 export async function POST(request: Request) {
@@ -26,6 +27,8 @@ export async function POST(request: Request) {
   }
 
   const paymentPreference: PaymentPreference | null = method === "pickup" && body.paymentPreference === "in_person" ? "in_person" : method === "pickup" ? "electronic" : null;
+  const pickupLocation: string | null =
+    method === "pickup" ? PICKUP_LOCATIONS.find((l) => l.address === body.pickupLocation)?.address || PICKUP_LOCATIONS[0].address : null;
 
   let address: Address | null = null;
   if (method === "ship") {
@@ -58,6 +61,7 @@ export async function POST(request: Request) {
       method,
       address,
       payment_preference: paymentPreference,
+      pickup_location: pickupLocation,
       notes,
       total,
     })

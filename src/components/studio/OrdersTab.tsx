@@ -18,8 +18,8 @@ function formatPlaced(iso: string) {
 
 function addressLine(o: Order) {
   const a = o.address;
-  if (!a) return "Local pickup at the studio";
-  return [a.street, a.street2, [a.city, a.state].filter(Boolean).join(", "), a.zip].filter((v) => v && String(v).trim()).join(", ") || "Local pickup at the studio";
+  if (!a) return o.pickup_location || "Local pickup, location not set";
+  return [a.street, a.street2, [a.city, a.state].filter(Boolean).join(", "), a.zip].filter((v) => v && String(v).trim()).join(", ") || "Local pickup, location not set";
 }
 
 export default function OrdersTab() {
@@ -49,13 +49,13 @@ export default function OrdersTab() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function setStatus(id: string, status: OrderStatus, trackingNumber?: string | null) {
+  async function setStatus(id: string, status: OrderStatus, extra?: { trackingNumber?: string | null; pickedUpBy?: string | null }) {
     setBusyId(id);
     try {
       await fetch(`/api/orders/${id}/status`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status, trackingNumber }),
+        body: JSON.stringify({ status, ...extra }),
       });
       await load();
     } finally {
@@ -67,10 +67,12 @@ export default function OrdersTab() {
     if (o.method === "ship") {
       const input = window.prompt("Tracking number for this shipment (optional — leave blank to skip):", o.tracking_number || "");
       if (input === null) return; // cancelled — don't mark as done
-      setStatus(o.id, "done", input.trim() || null);
+      setStatus(o.id, "done", { trackingNumber: input.trim() || null });
       return;
     }
-    setStatus(o.id, "done");
+    const input = window.prompt("Who picked this up? (optional — leave blank to skip)", o.picked_up_by || o.customer_name || "");
+    if (input === null) return; // cancelled — don't mark as done
+    setStatus(o.id, "done", { pickedUpBy: input.trim() || null });
   }
 
   async function removeOrder(id: string) {
@@ -191,6 +193,7 @@ export default function OrdersTab() {
                       {o.payment_preference === "in_person" ? "Wants to pay in person" : "Wants to pay electronically"}
                     </div>
                   )}
+                  {o.method === "pickup" && o.picked_up_by && <div style={{ fontSize: 13.5, color: "#8a3a61", marginTop: 3 }}>Picked up by: {o.picked_up_by}</div>}
                 </div>
               </div>
 

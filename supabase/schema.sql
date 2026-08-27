@@ -54,12 +54,16 @@ create table if not exists orders (
   total numeric not null default 0,
   tracking_number text,
   payment_preference text check (payment_preference in ('electronic', 'in_person')),
+  picked_up_by text,
+  pickup_location text,
   placed_at timestamptz not null default now()
 );
 
 -- Safe to re-run against a database that already has the orders table from
--- an earlier version of this script (before tracking numbers / resin / payment preference existed).
+-- an earlier version of this script (before tracking numbers / resin / payment preference / picked-up-by / pickup location existed).
 alter table orders add column if not exists tracking_number text;
+alter table orders add column if not exists picked_up_by text;
+alter table orders add column if not exists pickup_location text;
 alter table orders add column if not exists resin boolean not null default false;
 alter table orders add column if not exists payment_preference text check (payment_preference in ('electronic', 'in_person'));
 
@@ -162,8 +166,22 @@ create policy "admin manages shipping rates" on shipping_rates
 -- ---------------------------------------------------------------------------
 -- Realtime — let the Studio dashboard update live as orders/ideas come in
 -- ---------------------------------------------------------------------------
-alter publication supabase_realtime add table orders;
-alter publication supabase_realtime add table custom_requests;
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'orders'
+  ) then
+    alter publication supabase_realtime add table orders;
+  end if;
+
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'custom_requests'
+  ) then
+    alter publication supabase_realtime add table custom_requests;
+  end if;
+end $$;
 
 -- ---------------------------------------------------------------------------
 -- Storage buckets

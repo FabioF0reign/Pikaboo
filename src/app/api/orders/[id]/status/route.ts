@@ -10,6 +10,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   const body = await request.json();
   const status = body.status as OrderStatus;
   const trackingNumber: string | null = typeof body.trackingNumber === "string" && body.trackingNumber.trim() ? body.trackingNumber.trim() : null;
+  const pickedUpBy: string | null = typeof body.pickedUpBy === "string" && body.pickedUpBy.trim() ? body.pickedUpBy.trim() : null;
 
   if (!VALID.includes(status)) {
     return NextResponse.json({ error: "Invalid status." }, { status: 400 });
@@ -23,9 +24,12 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   }
 
-  const patch: { status: OrderStatus; tracking_number?: string } = { status };
+  const patch: { status: OrderStatus; tracking_number?: string; picked_up_by?: string } = { status };
   if (status === "done" && trackingNumber) {
     patch.tracking_number = trackingNumber;
+  }
+  if (status === "done" && pickedUpBy) {
+    patch.picked_up_by = pickedUpBy;
   }
 
   const { data, error } = await supabase.from("orders").update(patch).eq("id", id).select().single();

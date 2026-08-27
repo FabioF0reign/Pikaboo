@@ -94,7 +94,7 @@ export async function sendNewOrderEmail(order: Order) {
     ? [order.address.street, order.address.street2, [order.address.city, order.address.state].filter(Boolean).join(", "), order.address.zip]
         .filter((v) => v && v.trim())
         .join(", ")
-    : "Local pickup";
+    : order.pickup_location || "Local pickup";
 
   await client.emails.send({
     from: FROM,
@@ -139,6 +139,7 @@ export async function sendOrderConfirmedEmail(order: Order) {
   const paymentSection = payInPerson
     ? `<p>You chose to pay in person — nothing to do now, just bring cash, card, or whatever's easiest when you pick up.</p>`
     : `${paymentLinksHtml(order)}`;
+  const pickupLine = order.method === "pickup" && order.pickup_location ? `<p><b>Pickup location:</b> ${order.pickup_location}</p>` : "";
 
   await client.emails.send({
     from: FROM,
@@ -147,6 +148,7 @@ export async function sendOrderConfirmedEmail(order: Order) {
     html: `
       <h2>Your order is confirmed, ${order.customer_name}!</h2>
       <p>Genny has confirmed your order <b>${order.order_no}</b> — a <b>${order.product_name}</b> (${order.size_label}, qty ${order.qty}).</p>
+      ${pickupLine}
       <p>Total due: <b>${money(order.total)}</b></p>
       ${paymentSection}
       <p>Thanks for ordering from Pikaboo!</p>
@@ -158,6 +160,8 @@ export async function sendOrderReadyEmail(order: Order) {
   const client = getClient();
   if (!client) return;
 
+  const pickupLine = order.pickup_location ? `<p><b>Pickup location:</b> ${order.pickup_location}</p>` : "";
+
   await client.emails.send({
     from: FROM,
     to: order.customer_email,
@@ -166,6 +170,7 @@ export async function sendOrderReadyEmail(order: Order) {
       <h2>It's ready, ${order.customer_name}!</h2>
       <p>Your order <b>${order.order_no}</b> — <b>${order.product_name}</b> (${order.size_label}, qty ${order.qty}) — is ready.</p>
       <p><b>It'll be left outside for you to pick up.</b></p>
+      ${pickupLine}
       <p>Thanks for ordering from Pikaboo!</p>
     `,
   });
