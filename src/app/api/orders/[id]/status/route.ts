@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { sendOrderConfirmedEmail, sendOrderDoneEmail } from "@/lib/email";
+import { sendOrderConfirmedEmail, sendOrderReadyEmail, sendOrderDoneEmail } from "@/lib/email";
 import type { Order, OrderStatus } from "@/lib/types";
 
 const VALID: OrderStatus[] = ["new", "confirmed", "printing", "ready", "done"];
@@ -38,6 +38,8 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   try {
     if (status === "confirmed") {
       await sendOrderConfirmedEmail(order);
+    } else if (status === "ready" && order.method === "pickup") {
+      await sendOrderReadyEmail(order);
     } else if (status === "done") {
       await sendOrderDoneEmail(order);
     }
