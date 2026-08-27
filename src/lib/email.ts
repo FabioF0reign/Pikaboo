@@ -34,6 +34,13 @@ function formatPhone(phone: string) {
   return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
 }
 
+// & must be encoded as &amp; inside an HTML attribute — some mail clients'
+// stricter parsers (Outlook desktop in particular) mangle a raw "&" in an
+// href and truncate the URL there, which makes the whole link a dead tap.
+function escAttr(url: string) {
+  return url.replace(/&/g, "&amp;");
+}
+
 function paymentLinksHtml(order: Order) {
   const amount = Math.round(Number(order.total) || 0);
   const note = `Pikaboo order ${order.order_no}`;
@@ -64,7 +71,7 @@ function paymentLinksHtml(order: Order) {
   const buttons = links
     .map(
       (l) =>
-        `<a href="${l.url}" style="display:inline-block;margin:6px 8px 6px 0;padding:12px 20px;background:${l.color};color:#fff;font-weight:bold;text-decoration:none;border-radius:999px;">${l.label} — ${money(amount)}</a>`
+        `<a href="${escAttr(l.url)}" style="display:inline-block;margin:6px 8px 6px 0;padding:12px 20px;background:${l.color};color:#fff;font-weight:bold;text-decoration:none;border-radius:999px;">${l.label} — ${money(amount)}</a>`
     )
     .join("");
 
@@ -76,7 +83,7 @@ function paymentLinksHtml(order: Order) {
   const shopPhone = process.env.SHOP_PHONE;
   const applePayLine =
     process.env.OFFER_APPLE_PAY_NOTE !== "false" && shopPhone
-      ? `<p>Prefer Apple Cash? Text Genny at <b>${formatPhone(shopPhone)}</b> and she'll send you a request through Messages.</p>`
+      ? `<p>Prefer Apple Cash? <a href="sms:${shopPhone.replace(/\D/g, "")}" style="color:#3d95ce;font-weight:bold;">Text Genny at ${formatPhone(shopPhone)}</a> and she'll send you a request through Messages.</p>`
       : "";
 
   if (!links.length && !zelleLine && !applePayLine) return "";
