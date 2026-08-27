@@ -197,7 +197,7 @@ export default function OrderForm() {
           method,
           address: method === "ship" ? { street, street2, city, state: stateName, zip } : null,
           paymentPreference: method === "pickup" ? paymentPreference : null,
-          pickupLocation: method === "pickup" ? PICKUP_LOCATIONS.find((l) => l.key === pickupLocation)?.address || null : null,
+          pickupLocation: method === "pickup" ? pickupLocation : null,
           notes,
           total,
         }),
@@ -596,7 +596,7 @@ export default function OrderForm() {
             {method === "pickup" && (
               <div style={{ marginTop: 14, background: "#fff", border: "3px solid #fbd6e7", borderRadius: 20, padding: 14 }}>
                 <h3 style={{ margin: "0 0 10px", fontFamily: "'Baloo 2', sans-serif", fontWeight: 800, fontSize: 17 }}>Pick up where?</h3>
-                <div role="group" aria-label="Pickup location" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                <div role="group" aria-label="Pickup location" style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
                   {PICKUP_LOCATIONS.map((loc) => {
                     const selected = pickupLocation === loc.key;
                     return (
@@ -605,15 +605,15 @@ export default function OrderForm() {
                         type="button"
                         onClick={() => setPickupLocation(loc.key)}
                         aria-pressed={selected}
-                        style={{ position: "relative", textAlign: "left", background: "#fff7fa", border: "3px solid #f9bcd9", borderRadius: 16, padding: "11px 14px", cursor: "pointer" }}
+                        style={{ position: "relative", background: "#fff7fa", border: "3px solid #f9bcd9", borderRadius: 999, padding: "11px 18px", fontWeight: 800, fontSize: 14, color: "#5a1c3a", cursor: "pointer" }}
                       >
-                        <div style={{ fontFamily: "'Baloo 2', sans-serif", fontWeight: 800, fontSize: 15 }}>{loc.label}</div>
-                        <div style={{ fontSize: 13, color: "#8a3a61" }}>{loc.address}</div>
-                        {selected && <span style={{ position: "absolute", inset: -3, border: "4px solid #ec3d84", borderRadius: 19, pointerEvents: "none" }} />}
+                        {loc.label}
+                        {selected && <span style={{ position: "absolute", inset: -3, border: "4px solid #ec3d84", borderRadius: 999, pointerEvents: "none" }} />}
                       </button>
                     );
                   })}
                 </div>
+                <div style={{ fontSize: 12.5, color: "#8a3a61", marginTop: 9 }}>Genny will email you the exact address once your order&apos;s ready.</div>
               </div>
             )}
             {method === "pickup" && (
@@ -684,7 +684,7 @@ export default function OrderForm() {
                 ...(resin ? [{ label: "Finish", value: `Resin · +$${RESIN_COST}` }] : []),
                 { label: "Delivery", value: METHODS.find((m) => m.key === method)!.label + (method === "ship" ? ` · +$${shipCost}` : "") + (rush ? " · rush" : "") },
                 ...(method === "ship" ? [{ label: "Ship to", value: addrSummary || "add your address above" }] : []),
-                ...(method === "pickup" ? [{ label: "Pick up at", value: PICKUP_LOCATIONS.find((l) => l.key === pickupLocation)?.address || "" }] : []),
+                ...(method === "pickup" ? [{ label: "Pick up at", value: PICKUP_LOCATIONS.find((l) => l.key === pickupLocation)?.label || "" }] : []),
                 ...(method === "pickup" ? [{ label: "Payment", value: paymentPreference === "electronic" ? "Electronic" : "In person at pickup" }] : []),
               ].map((row) => (
                 <div key={row.label} style={{ display: "flex", gap: 12, alignItems: "baseline", borderBottom: "2px dashed rgba(255,255,255,.4)", paddingBottom: 7 }}>

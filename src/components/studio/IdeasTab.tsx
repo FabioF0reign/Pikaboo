@@ -15,6 +15,7 @@ function formatPlaced(iso: string) {
 
 const STATUS_LABEL: Record<CustomRequest["status"], string> = { new: "NEW IDEA", replied: "REPLIED", added: "ON THE MENU" };
 const STATUS_COLOR: Record<CustomRequest["status"], string> = { new: "#c22168", replied: "#456020", added: "#1f6d96" };
+const EMAIL_RE = /\S+@\S+\.\S+/;
 
 export default function IdeasTab({ onAddedToMenu }: { onAddedToMenu: () => void }) {
   const supabase = useMemo(() => createClient(), []);
@@ -22,6 +23,9 @@ export default function IdeasTab({ onAddedToMenu }: { onAddedToMenu: () => void 
   const [prices, setPrices] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
+  const [replyingId, setReplyingId] = useState<string | null>(null);
+  const [replyErrors, setReplyErrors] = useState<Record<string, string>>({});
 
   async function load() {
     const { data } = await supabase.from("custom_requests").select("*").order("created_at", { ascending: false });
@@ -51,6 +55,28 @@ export default function IdeasTab({ onAddedToMenu }: { onAddedToMenu: () => void 
   async function markReplied(id: string) {
     await supabase.from("custom_requests").update({ status: "replied" }).eq("id", id);
     load();
+  }
+
+  async function sendReply(idea: CustomRequest) {
+    const message = (replyDrafts[idea.id] || "").trim();
+    if (!message) return;
+    setReplyingId(idea.id);
+    setReplyErrors((e) => ({ ...e, [idea.id]: "" }));
+    try {
+      const res = await fetch(`/api/requests/${idea.id}/reply`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Could not send the reply.");
+      setReplyDrafts((d) => ({ ...d, [idea.id]: "" }));
+      await load();
+    } catch (err) {
+      setReplyErrors((e) => ({ ...e, [idea.id]: err instanceof Error ? err.message : "Could not send the reply." }));
+    } finally {
+      setReplyingId(null);
+    }
   }
 
   async function removeIdea(id: string) {
@@ -134,6 +160,33 @@ export default function IdeasTab({ onAddedToMenu }: { onAddedToMenu: () => void 
                 {idea.budget?.trim() ? `customer suggested ${idea.budget}` : "no budget given — starting at $20"}
               </span>
             </div>
+
+            {EMAIL_RE.test(idea.contact) ? (
+              <div style={{ marginTop: 12 }}>
+                {idea.reply_message && (
+                  <div style={{ background: "#fff", border: "3px solid #fbd6e7", borderRadius: 14, padding: "10px 13px", fontSize: 13.5, color: "#5a1c3a", marginBottom: 8 }}>
+                    <div style={{ fontWeight: 800, fontSize: 11.5, letterSpacing: ".05em", color: "#456020", marginBottom: 3 }}>LAST REPLY SENT</div>
+                    {idea.reply_message}
+                  </div>
+                )}
+                <textarea
+                  rows={2}
+                  value={replyDrafts[idea.id] || ""}
+                  onChange={(e) => setReplyDrafts((d) => ({ ...d, [idea.id]: e.target.value }))}
+                  placeholder="Type a reply — this emails the customer directly"
+                  aria-label={`Reply to ${idea.customer_name || "customer"}`}
+                  style={{ width: "100%", border: "3px solid #f9bcd9", borderRadius: 14, padding: "10px 13px", fontSize: 14, color: "#5a1c3a", background: "#fff", resize: "vertical" }}
+                />
+                {replyErrors[idea.id] && (
+                  <div role="alert" style={{ fontSize: 13, color: "#c22168", fontWeight: 700, marginTop: 6 }}>
+                    {replyErrors[idea.id]}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div style={{ fontSize: 12.5, color: "#8a3a61", marginTop: 10 }}>No email on file for this idea — reply to &quot;{idea.contact}&quot; directly, then mark it replied.</div>
+            )}
+
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 14 }}>
               <button
                 type="button"
@@ -143,13 +196,35 @@ export default function IdeasTab({ onAddedToMenu }: { onAddedToMenu: () => void 
               >
                 {idea.status === "added" ? "Already on the menu" : `Add to the menu at $${price}`}
               </button>
-              <button
-                type="button"
-                onClick={() => markReplied(idea.id)}
-                style={{ background: "#fdeaf3", color: "#c22168", border: "3px solid #f9bcd9", borderRadius: 999, padding: "10px 16px", fontWeight: 800, fontSize: 13.5, cursor: "pointer", minHeight: 44 }}
-              >
-                Mark replied
-              </button>
+              {EMAIL_RE.test(idea.contact) ? (
+                <button
+                  type="button"
+                  disabled={replyingId === idea.id || !(replyDrafts[idea.id] || "").trim()}
+                  onClick={() => sendReply(idea)}
+                  style={{
+                    background: "#fdeaf3",
+                    color: "#c22168",
+                    border: "3px solid #f9bcd9",
+                    borderRadius: 999,
+                    padding: "10px 16px",
+                    fontWeight: 800,
+                    fontSize: 13.5,
+                    cursor: replyingId === idea.id ? "default" : "pointer",
+                    minHeight: 44,
+                    opacity: (replyDrafts[idea.id] || "").trim() ? 1 : 0.6,
+                  }}
+                >
+                  {replyingId === idea.id ? "Sending…" : "Send reply"}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => markReplied(idea.id)}
+                  style={{ background: "#fdeaf3", color: "#c22168", border: "3px solid #f9bcd9", borderRadius: 999, padding: "10px 16px", fontWeight: 800, fontSize: 13.5, cursor: "pointer", minHeight: 44 }}
+                >
+                  Mark replied
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => removeIdea(idea.id)}

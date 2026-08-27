@@ -50,6 +50,7 @@ export type Order = {
   payment_preference: PaymentPreference | null;
   picked_up_by: string | null;
   pickup_location: string | null;
+  assigned_to: string | null;
   placed_at: string;
 };
 
@@ -75,5 +76,6 @@ export type CustomRequest = {
   customer_name: string;
   contact: string;
   photo_url: string | null;
+  reply_message: string | null;
   created_at: string;
 };

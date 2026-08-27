@@ -56,14 +56,16 @@ create table if not exists orders (
   payment_preference text check (payment_preference in ('electronic', 'in_person')),
   picked_up_by text,
   pickup_location text,
+  assigned_to text,
   placed_at timestamptz not null default now()
 );
 
 -- Safe to re-run against a database that already has the orders table from
--- an earlier version of this script (before tracking numbers / resin / payment preference / picked-up-by / pickup location existed).
+-- an earlier version of this script (before tracking numbers / resin / payment preference / picked-up-by / pickup location / assigned-to existed).
 alter table orders add column if not exists tracking_number text;
 alter table orders add column if not exists picked_up_by text;
 alter table orders add column if not exists pickup_location text;
+alter table orders add column if not exists assigned_to text;
 alter table orders add column if not exists resin boolean not null default false;
 alter table orders add column if not exists payment_preference text check (payment_preference in ('electronic', 'in_person'));
 
@@ -78,8 +80,11 @@ create table if not exists custom_requests (
   customer_name text not null default '',
   contact text not null,
   photo_url text,
+  reply_message text,
   created_at timestamptz not null default now()
 );
+
+alter table custom_requests add column if not exists reply_message text;
 
 -- Single-row table for shop-wide on/off switches the admin controls from
 -- the Studio (e.g. temporarily hiding the resin add-on while out of stock).

@@ -28,7 +28,7 @@ export async function POST(request: Request) {
 
   const paymentPreference: PaymentPreference | null = method === "pickup" && body.paymentPreference === "in_person" ? "in_person" : method === "pickup" ? "electronic" : null;
   const pickupLocation: string | null =
-    method === "pickup" ? PICKUP_LOCATIONS.find((l) => l.address === body.pickupLocation)?.address || PICKUP_LOCATIONS[0].address : null;
+    method === "pickup" ? PICKUP_LOCATIONS.find((l) => l.key === body.pickupLocation)?.key || PICKUP_LOCATIONS[0].key : null;
 
   let address: Address | null = null;
   if (method === "ship") {

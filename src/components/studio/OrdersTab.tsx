@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { FLOW, flowOf } from "@/lib/orderFlow";
+import { pickupLocationByKey } from "@/lib/pickupLocations";
 import type { Order, OrderStatus } from "@/lib/types";
 
 const statBox: React.CSSProperties = { background: "#fff7fa", border: "4px solid #f9bcd9", borderRadius: 22, padding: "12px 14px" };
@@ -18,7 +19,10 @@ function formatPlaced(iso: string) {
 
 function addressLine(o: Order) {
   const a = o.address;
-  if (!a) return o.pickup_location || "Local pickup, location not set";
+  if (!a) {
+    const loc = pickupLocationByKey(o.pickup_location);
+    return loc ? `${loc.label} — ${loc.address}` : "Local pickup, location not set";
+  }
   return [a.street, a.street2, [a.city, a.state].filter(Boolean).join(", "), a.zip].filter((v) => v && String(v).trim()).join(", ") || "Local pickup, location not set";
 }
 
@@ -78,6 +82,13 @@ export default function OrdersTab() {
   async function removeOrder(id: string) {
     if (!confirm("Delete this order? This can't be undone.")) return;
     await supabase.from("orders").delete().eq("id", id);
+    await load();
+  }
+
+  async function claimOrder(o: Order) {
+    const input = window.prompt("Who's working on this order? (leave blank to unclaim)", o.assigned_to || "");
+    if (input === null) return; // cancelled
+    await supabase.from("orders").update({ assigned_to: input.trim() || null }).eq("id", o.id);
     await load();
   }
 
@@ -158,6 +169,27 @@ export default function OrdersTab() {
                 {o.resin && <span style={{ fontWeight: 800, fontSize: 12, color: "#1f6d96", background: "#c7e9ff", borderRadius: 999, padding: "6px 11px" }}>RESIN</span>}
                 <span style={{ marginLeft: "auto", fontSize: 12.5, fontWeight: 700, color: "#8a3a61" }}>{formatPlaced(o.placed_at)}</span>
               </div>
+
+              <button
+                type="button"
+                onClick={() => claimOrder(o)}
+                style={{
+                  marginTop: 10,
+                  display: "block",
+                  width: "100%",
+                  textAlign: "left",
+                  background: o.assigned_to ? "#3a5119" : "#fdeaf3",
+                  color: o.assigned_to ? "#ffffff" : "#c22168",
+                  border: o.assigned_to ? "none" : "2px dashed #f592bf",
+                  borderRadius: 14,
+                  padding: "8px 12px",
+                  fontWeight: 800,
+                  fontSize: 13,
+                  cursor: "pointer",
+                }}
+              >
+                {o.assigned_to ? `🖨 ${o.assigned_to} is on this — tap to reassign` : "Nobody's claimed this yet — tap to claim it"}
+              </button>
 
               <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "baseline", marginTop: 12 }}>
                 <span style={{ fontFamily: "'Baloo 2', sans-serif", fontWeight: 800, fontSize: 21 }}>{o.product_name}</span>

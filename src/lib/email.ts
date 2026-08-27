@@ -1,4 +1,5 @@
 import { Resend } from "resend";
+import { pickupLocationByKey } from "./pickupLocations";
 import type { Order, CustomRequest } from "./types";
 
 // All email is best-effort: a failure here should never block an order or
@@ -90,11 +91,14 @@ export async function sendNewOrderEmail(order: Order) {
   const colorLines = order.colors
     .map((c) => `${c.name}${c.note ? " — " + c.note : ""}`)
     .join("<br>");
+  const pickupLoc = pickupLocationByKey(order.pickup_location);
   const addr = order.address
     ? [order.address.street, order.address.street2, [order.address.city, order.address.state].filter(Boolean).join(", "), order.address.zip]
         .filter((v) => v && v.trim())
         .join(", ")
-    : order.pickup_location || "Local pickup";
+    : pickupLoc
+      ? `${pickupLoc.label} — ${pickupLoc.address}`
+      : "Local pickup";
 
   await client.emails.send({
     from: FROM,
@@ -131,6 +135,23 @@ export async function sendNewRequestEmail(req: CustomRequest) {
   });
 }
 
+export async function sendIdeaReplyEmail(req: CustomRequest, message: string) {
+  const client = getClient();
+  if (!client) return;
+
+  await client.emails.send({
+    from: FROM,
+    to: req.contact,
+    subject: `Genny replied about your custom print idea ${req.request_no}`,
+    html: `
+      <h2>${req.customer_name?.trim() ? `Hi ${req.customer_name}!` : "Hi there!"}</h2>
+      <p>Genny replied to your custom print idea (<b>${req.request_no}</b>):</p>
+      <p style="white-space: pre-wrap;">${message}</p>
+      <p style="margin-top: 20px; font-size: 13px; color: #666;">Your idea: "${req.idea}"</p>
+    `,
+  });
+}
+
 export async function sendOrderConfirmedEmail(order: Order) {
   const client = getClient();
   if (!client) return;
@@ -139,7 +160,11 @@ export async function sendOrderConfirmedEmail(order: Order) {
   const paymentSection = payInPerson
     ? `<p>You chose to pay in person — nothing to do now, just bring cash, card, or whatever's easiest when you pick up.</p>`
     : `${paymentLinksHtml(order)}`;
-  const pickupLine = order.method === "pickup" && order.pickup_location ? `<p><b>Pickup location:</b> ${order.pickup_location}</p>` : "";
+  const confirmedPickupLoc = pickupLocationByKey(order.pickup_location);
+  const pickupLine =
+    order.method === "pickup" && confirmedPickupLoc
+      ? `<p><b>Pickup location:</b> ${confirmedPickupLoc.label} — Genny will send the exact address once it's ready.</p>`
+      : "";
 
   await client.emails.send({
     from: FROM,
@@ -160,7 +185,8 @@ export async function sendOrderReadyEmail(order: Order) {
   const client = getClient();
   if (!client) return;
 
-  const pickupLine = order.pickup_location ? `<p><b>Pickup location:</b> ${order.pickup_location}</p>` : "";
+  const readyPickupLoc = pickupLocationByKey(order.pickup_location);
+  const pickupLine = readyPickupLoc ? `<p><b>Pickup address:</b> ${readyPickupLoc.address}</p>` : "";
 
   await client.emails.send({
     from: FROM,
