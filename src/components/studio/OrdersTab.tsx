@@ -7,6 +7,7 @@ import { pickupLocationByKey } from "@/lib/pickupLocations";
 import type { Order, OrderStatus } from "@/lib/types";
 
 const statBox: React.CSSProperties = { background: "#fff7fa", border: "4px solid #f9bcd9", borderRadius: 22, padding: "12px 14px" };
+const WORKERS = ["Fabian", "Thalia"];
 
 function formatPlaced(iso: string) {
   try {
@@ -85,10 +86,13 @@ export default function OrdersTab() {
     await load();
   }
 
-  async function claimOrder(o: Order) {
-    const input = window.prompt("Who's working on this order? (leave blank to unclaim)", o.assigned_to || "");
-    if (input === null) return; // cancelled
-    await supabase.from("orders").update({ assigned_to: input.trim() || null }).eq("id", o.id);
+  async function claimOrder(o: Order, name: string) {
+    const next = o.assigned_to === name ? null : name;
+    const { error } = await supabase.from("orders").update({ assigned_to: next }).eq("id", o.id);
+    if (error) {
+      alert(`Could not update: ${error.message}`);
+      return;
+    }
     await load();
   }
 
@@ -170,26 +174,49 @@ export default function OrdersTab() {
                 <span style={{ marginLeft: "auto", fontSize: 12.5, fontWeight: 700, color: "#8a3a61" }}>{formatPlaced(o.placed_at)}</span>
               </div>
 
-              <button
-                type="button"
-                onClick={() => claimOrder(o)}
+              <div
+                role="group"
+                aria-label="Who's working on this order"
                 style={{
                   marginTop: 10,
-                  display: "block",
-                  width: "100%",
-                  textAlign: "left",
-                  background: o.assigned_to ? "#3a5119" : "#fdeaf3",
-                  color: o.assigned_to ? "#ffffff" : "#c22168",
-                  border: o.assigned_to ? "none" : "2px dashed #f592bf",
+                  display: "flex",
+                  flexWrap: "wrap",
+                  alignItems: "center",
+                  gap: 8,
+                  background: o.assigned_to ? "#eef7e2" : "#fdeaf3",
+                  border: o.assigned_to ? "2px solid #3a5119" : "2px dashed #f592bf",
                   borderRadius: 14,
-                  padding: "8px 12px",
-                  fontWeight: 800,
-                  fontSize: 13,
-                  cursor: "pointer",
+                  padding: "8px 10px",
                 }}
               >
-                {o.assigned_to ? `🖨 ${o.assigned_to} is on this — tap to reassign` : "Nobody's claimed this yet — tap to claim it"}
-              </button>
+                <span style={{ fontWeight: 800, fontSize: 12.5, color: o.assigned_to ? "#3a5119" : "#c22168" }}>
+                  {o.assigned_to ? "🖨 Printing:" : "Nobody's claimed this yet:"}
+                </span>
+                {WORKERS.map((name) => {
+                  const selected = o.assigned_to === name;
+                  return (
+                    <button
+                      key={name}
+                      type="button"
+                      onClick={() => claimOrder(o, name)}
+                      aria-pressed={selected}
+                      style={{
+                        background: selected ? "#3a5119" : "#fff",
+                        color: selected ? "#ffffff" : "#5a1c3a",
+                        border: "2px solid #f9bcd9",
+                        borderRadius: 999,
+                        padding: "6px 14px",
+                        fontWeight: 800,
+                        fontSize: 12.5,
+                        cursor: "pointer",
+                        minHeight: 32,
+                      }}
+                    >
+                      {name}
+                    </button>
+                  );
+                })}
+              </div>
 
               <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "baseline", marginTop: 12 }}>
                 <span style={{ fontFamily: "'Baloo 2', sans-serif", fontWeight: 800, fontSize: 21 }}>{o.product_name}</span>
