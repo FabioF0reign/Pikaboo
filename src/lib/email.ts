@@ -17,6 +17,10 @@ function money(n: number) {
   return "$" + Number(n || 0).toFixed(0);
 }
 
+function productLabel(order: Order) {
+  return order.variant_name ? `${order.product_name} — ${order.variant_name}` : order.product_name;
+}
+
 // Strips a leading @ or $ in case the handle was pasted in with it, e.g. "@FabianArellano" or "$WitheredSprout".
 function cleanHandle(handle: string) {
   return handle.replace(/^[@$]/, "").trim();
@@ -103,10 +107,10 @@ export async function sendNewOrderEmail(order: Order) {
   await client.emails.send({
     from: FROM,
     to: STUDIO_EMAIL,
-    subject: `New order ${order.order_no} — ${order.product_name}`,
+    subject: `New order ${order.order_no} — ${productLabel(order)}`,
     html: `
       <h2>New order: ${order.order_no}</h2>
-      <p><b>${order.product_name}</b> · ${order.size_label} · qty ${order.qty}${order.rush ? " · RUSH" : ""}${order.resin ? " · RESIN" : ""}</p>
+      <p><b>${productLabel(order)}</b> · ${order.size_label} · qty ${order.qty}${order.rush ? " · RUSH" : ""}${order.resin ? " · RESIN" : ""}</p>
       <p><b>Colors</b><br>${colorLines || "none picked"}</p>
       <p><b>From</b><br>${order.customer_name}<br>${order.customer_email}<br>${order.customer_phone || ""}</p>
       <p><b>${order.method === "ship" ? "Ship to" : "Pickup"}</b><br>${addr}</p>
@@ -172,7 +176,7 @@ export async function sendOrderConfirmedEmail(order: Order) {
     subject: `Your Pikaboo order ${order.order_no} is confirmed!`,
     html: `
       <h2>Your order is confirmed, ${order.customer_name}!</h2>
-      <p>Genny has confirmed your order <b>${order.order_no}</b> — a <b>${order.product_name}</b> (${order.size_label}, qty ${order.qty}).</p>
+      <p>Genny has confirmed your order <b>${order.order_no}</b> — a <b>${productLabel(order)}</b> (${order.size_label}, qty ${order.qty}).</p>
       ${pickupLine}
       <p>Total due: <b>${money(order.total)}</b></p>
       ${paymentSection}
@@ -194,7 +198,7 @@ export async function sendOrderReadyEmail(order: Order) {
     subject: `Your Pikaboo order ${order.order_no} is ready for pickup!`,
     html: `
       <h2>It's ready, ${order.customer_name}!</h2>
-      <p>Your order <b>${order.order_no}</b> — <b>${order.product_name}</b> (${order.size_label}, qty ${order.qty}) — is ready.</p>
+      <p>Your order <b>${order.order_no}</b> — <b>${productLabel(order)}</b> (${order.size_label}, qty ${order.qty}) — is ready.</p>
       <p><b>It'll be left outside for you to pick up.</b></p>
       ${pickupLine}
       <p>Thanks for ordering from Pikaboo!</p>
@@ -216,7 +220,7 @@ export async function sendOrderDoneEmail(order: Order) {
       subject: `Your Pikaboo order ${order.order_no} has shipped!`,
       html: `
         <h2>It's on its way, ${order.customer_name}!</h2>
-        <p>Your order <b>${order.order_no}</b> — <b>${order.product_name}</b> (${order.size_label}, qty ${order.qty}) — has shipped.</p>
+        <p>Your order <b>${order.order_no}</b> — <b>${productLabel(order)}</b> (${order.size_label}, qty ${order.qty}) — has shipped.</p>
         ${trackingLine}
         <p>Thanks for ordering from Pikaboo!</p>
       `,
@@ -228,7 +232,7 @@ export async function sendOrderDoneEmail(order: Order) {
       subject: `Thanks for picking up your Pikaboo order ${order.order_no}!`,
       html: `
         <h2>Thanks for stopping by, ${order.customer_name}!</h2>
-        <p>Your order <b>${order.order_no}</b> — <b>${order.product_name}</b> (${order.size_label}, qty ${order.qty}) — is all yours now.</p>
+        <p>Your order <b>${order.order_no}</b> — <b>${productLabel(order)}</b> (${order.size_label}, qty ${order.qty}) — is all yours now.</p>
         <p>Thanks for ordering from Pikaboo!</p>
       `,
     });

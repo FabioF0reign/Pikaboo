@@ -26,6 +26,18 @@ create table if not exists products (
   created_at timestamptz not null default now()
 );
 
+-- Design options within a print (e.g. different keychain shapes) — like an
+-- Amazon-style variant picker. Optional: a product with zero or one variant
+-- just skips the picker on the order form.
+create table if not exists product_variants (
+  id uuid primary key default gen_random_uuid(),
+  product_id uuid not null references products(id) on delete cascade,
+  name text not null,
+  photo_url text,
+  sort_order integer not null default 0
+);
+create index if not exists product_variants_product_idx on product_variants (product_id, sort_order);
+
 create table if not exists colors (
   id uuid primary key default gen_random_uuid(),
   name text not null,
@@ -41,6 +53,7 @@ create table if not exists orders (
   status text not null default 'new' check (status in ('new', 'confirmed', 'printing', 'ready', 'done')),
   product_name text not null,
   size_label text not null,
+  variant_name text,
   qty integer not null default 1 check (qty >= 1),
   rush boolean not null default false,
   resin boolean not null default false,
@@ -66,6 +79,7 @@ alter table orders add column if not exists tracking_number text;
 alter table orders add column if not exists picked_up_by text;
 alter table orders add column if not exists pickup_location text;
 alter table orders add column if not exists assigned_to text;
+alter table orders add column if not exists variant_name text;
 alter table orders add column if not exists resin boolean not null default false;
 alter table orders add column if not exists payment_preference text check (payment_preference in ('electronic', 'in_person'));
 
@@ -118,6 +132,7 @@ create index if not exists colors_sort_idx on colors (sort_order);
 -- "authenticated" == "admin" — see setup instructions for creating it.
 -- ---------------------------------------------------------------------------
 alter table products enable row level security;
+alter table product_variants enable row level security;
 alter table colors enable row level security;
 alter table orders enable row level security;
 alter table custom_requests enable row level security;
@@ -130,6 +145,14 @@ create policy "products are publicly readable" on products
 
 drop policy if exists "admin manages products" on products;
 create policy "admin manages products" on products
+  for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
+
+drop policy if exists "product variants are publicly readable" on product_variants;
+create policy "product variants are publicly readable" on product_variants
+  for select using (true);
+
+drop policy if exists "admin manages product variants" on product_variants;
+create policy "admin manages product variants" on product_variants
   for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
 
 drop policy if exists "colors are publicly readable" on colors;

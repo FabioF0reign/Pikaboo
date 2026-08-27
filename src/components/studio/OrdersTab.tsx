@@ -219,7 +219,10 @@ export default function OrdersTab() {
               </div>
 
               <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "baseline", marginTop: 12 }}>
-                <span style={{ fontFamily: "'Baloo 2', sans-serif", fontWeight: 800, fontSize: 21 }}>{o.product_name}</span>
+                <span style={{ fontFamily: "'Baloo 2', sans-serif", fontWeight: 800, fontSize: 21 }}>
+                  {o.product_name}
+                  {o.variant_name && <span style={{ color: "#b81a5c" }}> — {o.variant_name}</span>}
+                </span>
                 <span style={{ fontSize: 13.5, fontWeight: 700, color: "#8a3a61" }}>
                   {o.size_label} · qty {o.qty}
                 </span>

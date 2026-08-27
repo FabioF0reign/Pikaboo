@@ -9,6 +9,7 @@ export async function POST(request: Request) {
 
   const productName = String(body.productName || "").trim();
   const sizeLabel = String(body.sizeLabel || "").trim();
+  const variantName = typeof body.variantName === "string" && body.variantName.trim() ? body.variantName.trim() : null;
   const qty = Math.max(1, Math.min(20, Number(body.qty) || 1));
   const rush = !!body.rush;
   const resin = !!body.resin;
@@ -51,6 +52,7 @@ export async function POST(request: Request) {
     .insert({
       product_name: productName,
       size_label: sizeLabel,
+      variant_name: variantName,
       qty,
       rush,
       resin,

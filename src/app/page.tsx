@@ -6,7 +6,7 @@ import { resizeImageToBlob, uploadPhoto } from "@/lib/image";
 import PageDecor from "@/components/PageDecor";
 import { US_STATES } from "@/lib/usStates";
 import { PICKUP_LOCATIONS } from "@/lib/pickupLocations";
-import type { Product, FilamentColor, OrderColor, ShippingRate } from "@/lib/types";
+import type { Product, ProductVariant, FilamentColor, OrderColor, ShippingRate } from "@/lib/types";
 
 const SIZES = [
   { key: "sm", label: "Small", note: "palm size · x1.0", mult: 1 },
@@ -76,6 +76,7 @@ export default function OrderForm() {
   const supabase = useMemo(() => createClient(), []);
 
   const [products, setProducts] = useState<Product[]>([]);
+  const [variants, setVariants] = useState<ProductVariant[]>([]);
   const [colors, setColors] = useState<FilamentColor[]>([]);
   const [catalogLoaded, setCatalogLoaded] = useState(false);
   const [resinAvailable, setResinAvailable] = useState(true);
@@ -83,6 +84,7 @@ export default function OrderForm() {
   const [defaultShipRate, setDefaultShipRate] = useState(6);
 
   const [productId, setProductId] = useState("");
+  const [variantId, setVariantId] = useState<string | null>(null);
   const [picks, setPicks] = useState<Pick[]>([]);
   const [size, setSize] = useState<(typeof SIZES)[number]["key"]>("sm");
   const [qty, setQty] = useState(1);
@@ -122,17 +124,22 @@ export default function OrderForm() {
 
   useEffect(() => {
     (async () => {
-      const [{ data: p }, { data: c }, { data: settings }, { data: rates }] = await Promise.all([
+      const [{ data: p }, { data: v }, { data: c }, { data: settings }, { data: rates }] = await Promise.all([
         supabase.from("products").select("*").order("sort_order"),
+        supabase.from("product_variants").select("*").order("sort_order"),
         supabase.from("colors").select("*").eq("available", true).order("sort_order"),
         supabase.from("shop_settings").select("resin_available, default_shipping_rate").eq("id", 1).single(),
         supabase.from("shipping_rates").select("*"),
       ]);
       const prods = p || [];
+      const vars = v || [];
       const cols = c || [];
       setProducts(prods);
+      setVariants(vars);
       setColors(cols);
       if (prods.length) setProductId(prods[0].id);
+      const firstVariant = vars.find((x) => x.product_id === prods[0]?.id);
+      setVariantId(firstVariant ? firstVariant.id : null);
       if (cols.length) setPicks([{ name: cols[0].name, note: "" }]);
       const resinOn = settings ? settings.resin_available !== false : true;
       setResinAvailable(resinOn);
@@ -145,6 +152,8 @@ export default function OrderForm() {
   }, []);
 
   const product = products.find((p) => p.id === productId) || products[0];
+  const productVariants = variants.filter((v) => v.product_id === product?.id);
+  const variant = productVariants.find((v) => v.id === variantId) || null;
   const sizeInfo = SIZES.find((s) => s.key === size) || SIZES[0];
 
   const shipCost = useMemo(() => {
@@ -187,6 +196,7 @@ export default function OrderForm() {
         body: JSON.stringify({
           productName: product.name,
           sizeLabel: sizeInfo.label,
+          variantName: variant?.name || null,
           qty,
           rush,
           resin,
@@ -409,7 +419,11 @@ export default function OrderForm() {
                     <button
                       key={p.id}
                       type="button"
-                      onClick={() => setProductId(p.id)}
+                      onClick={() => {
+                        setProductId(p.id);
+                        const firstVariant = variants.find((v) => v.product_id === p.id);
+                        setVariantId(firstVariant ? firstVariant.id : null);
+                      }}
                       aria-pressed={selected}
                       style={{ position: "relative", textAlign: "left", background: "#fff", border: "3px solid #f9bcd9", borderRadius: 22, padding: "10px 10px 12px", cursor: "pointer", display: "flex", flexDirection: "column", gap: 8 }}
                     >
@@ -432,6 +446,50 @@ export default function OrderForm() {
                     </button>
                   );
                 })}
+              </div>
+            )}
+            {productVariants.length > 0 && (
+              <div style={{ marginTop: 16 }}>
+                <h3 style={{ margin: "0 0 10px", fontFamily: "'Baloo 2', sans-serif", fontWeight: 800, fontSize: 17, color: "#5a1c3a" }}>Choose a design</h3>
+                <div role="group" aria-label="Design option" style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
+                  {productVariants.map((v) => {
+                    const selected = v.id === variantId;
+                    return (
+                      <button
+                        key={v.id}
+                        type="button"
+                        onClick={() => setVariantId(v.id)}
+                        aria-pressed={selected}
+                        title={v.name}
+                        style={{ position: "relative", background: "none", border: "none", padding: 0, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 5, width: 84 }}
+                      >
+                        <span style={{ position: "relative", width: "100%", display: "block" }}>
+                          <span
+                            style={{
+                              width: "100%",
+                              aspectRatio: "1",
+                              borderRadius: 14,
+                              overflow: "hidden",
+                              display: "grid",
+                              placeItems: "center",
+                              background: v.photo_url ? undefined : "repeating-linear-gradient(135deg, #fce0ec 0 7px, #fbc9e0 7px 14px)",
+                              border: "3px solid #fff",
+                              boxShadow: "0 0 0 2px #fbd6e7",
+                            }}
+                          >
+                            {v.photo_url ? (
+                              <img src={v.photo_url} alt={v.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                            ) : (
+                              <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 9, color: "#8f1049", textAlign: "center", padding: "0 3px" }}>photo coming soon</span>
+                            )}
+                          </span>
+                          {selected && <span style={{ position: "absolute", inset: -5, border: "4px solid #ec3d84", borderRadius: 19, pointerEvents: "none" }} />}
+                        </span>
+                        <span style={{ fontSize: 11.5, fontWeight: 700, color: "#8a3a61", lineHeight: 1.1, textAlign: "center" }}>{v.name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             )}
           </div>
@@ -678,6 +736,7 @@ export default function OrderForm() {
             <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 8 }}>
               {[
                 { label: "Print", value: product?.name || "" },
+                ...(variant ? [{ label: "Design", value: variant.name }] : []),
                 { label: "Colors", value: colorSummary },
                 { label: "Size", value: sizeInfo.label },
                 { label: "Quantity", value: String(qty) },

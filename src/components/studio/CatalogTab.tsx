@@ -3,24 +3,27 @@
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { resizeImageToBlob, uploadPhoto } from "@/lib/image";
-import type { Product, FilamentColor, ShopSettings } from "@/lib/types";
+import type { Product, ProductVariant, FilamentColor, ShopSettings } from "@/lib/types";
 
 const smallInput: React.CSSProperties = { border: "3px solid #f9bcd9", borderRadius: 14, padding: "11px 13px", fontSize: 14, color: "#5a1c3a", background: "#fff7fa" };
 
 export default function CatalogTab() {
   const supabase = useMemo(() => createClient(), []);
   const [products, setProducts] = useState<Product[]>([]);
+  const [variants, setVariants] = useState<ProductVariant[]>([]);
   const [colors, setColors] = useState<FilamentColor[]>([]);
   const [settings, setSettings] = useState<Pick<ShopSettings, "resin_available">>({ resin_available: true });
   const [uploadingId, setUploadingId] = useState<string | null>(null);
 
   async function load() {
-    const [{ data: p }, { data: c }, { data: s }] = await Promise.all([
+    const [{ data: p }, { data: v }, { data: c }, { data: s }] = await Promise.all([
       supabase.from("products").select("*").order("sort_order"),
+      supabase.from("product_variants").select("*").order("sort_order"),
       supabase.from("colors").select("*").order("sort_order"),
       supabase.from("shop_settings").select("resin_available").eq("id", 1).single(),
     ]);
     setProducts(p || []);
+    setVariants(v || []);
     setColors(c || []);
     if (s) setSettings(s);
   }
@@ -89,6 +92,42 @@ export default function CatalogTab() {
       const url = await uploadPhoto(supabase, "product-photos", blob);
       patchProductLocal(id, { photo_url: url });
       await commitProduct(id, { photo_url: url });
+    } finally {
+      setUploadingId(null);
+    }
+  }
+
+  function patchVariantLocal(id: string, patch: Partial<ProductVariant>) {
+    setVariants((prev) => prev.map((v) => (v.id === id ? { ...v, ...patch } : v)));
+  }
+
+  async function commitVariant(id: string, patch: Partial<ProductVariant>) {
+    await supabase.from("product_variants").update(patch).eq("id", id);
+  }
+
+  async function addVariant(productId: string) {
+    const existing = variants.filter((v) => v.product_id === productId);
+    const nextSort = existing.length ? Math.max(...existing.map((v) => v.sort_order)) + 1 : 1;
+    const { data } = await supabase
+      .from("product_variants")
+      .insert({ product_id: productId, name: "New design", sort_order: nextSort })
+      .select()
+      .single();
+    if (data) setVariants((prev) => prev.concat(data));
+  }
+
+  async function removeVariant(id: string) {
+    await supabase.from("product_variants").delete().eq("id", id);
+    setVariants((prev) => prev.filter((v) => v.id !== id));
+  }
+
+  async function onVariantPhoto(id: string, file: File) {
+    setUploadingId(id);
+    try {
+      const blob = await resizeImageToBlob(file);
+      const url = await uploadPhoto(supabase, "product-photos", blob);
+      patchVariantLocal(id, { photo_url: url });
+      await commitVariant(id, { photo_url: url });
     } finally {
       setUploadingId(null);
     }
@@ -205,6 +244,66 @@ export default function CatalogTab() {
                   >
                     Remove print
                   </button>
+                </div>
+              </div>
+
+              <div style={{ width: "100%", marginTop: 4, borderTop: "2px dashed #fbd6e7", paddingTop: 10 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  <span style={{ fontWeight: 800, fontSize: 13, color: "#8a3a61" }}>Design options</span>
+                  <span style={{ fontSize: 12, color: "#8a3a61" }}>customers pick one, like Amazon&apos;s color swatches — leave empty for no picker</span>
+                  <button
+                    type="button"
+                    onClick={() => addVariant(p.id)}
+                    style={{ marginLeft: "auto", background: "#fdeaf3", color: "#c22168", border: "3px solid #f9bcd9", borderRadius: 999, padding: "7px 13px", fontWeight: 800, fontSize: 12.5, cursor: "pointer", minHeight: 36 }}
+                  >
+                    + Add a design
+                  </button>
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 10 }}>
+                  {variants
+                    .filter((v) => v.product_id === p.id)
+                    .map((v) => (
+                      <div key={v.id} style={{ width: 96, flex: "none" }}>
+                        <div style={{ position: "relative", width: "100%", aspectRatio: "1", borderRadius: 12, overflow: "hidden", background: "repeating-linear-gradient(135deg, #fce0ec 0 7px, #fbc9e0 7px 14px)", display: "grid", placeItems: "center" }}>
+                          {v.photo_url ? (
+                            <img src={v.photo_url} alt={v.name} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+                          ) : (
+                            <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, color: "#8f1049", textAlign: "center", padding: "0 3px" }}>
+                              {uploadingId === v.id ? "uploading…" : "no photo"}
+                            </span>
+                          )}
+                        </div>
+                        <input
+                          type="text"
+                          value={v.name}
+                          onChange={(e) => patchVariantLocal(v.id, { name: e.target.value })}
+                          onBlur={(e) => commitVariant(v.id, { name: e.target.value })}
+                          placeholder="Design name"
+                          aria-label="Design option name"
+                          style={{ ...smallInput, marginTop: 5, padding: "6px 8px", fontSize: 12, textAlign: "center" }}
+                        />
+                        <label style={{ display: "block", marginTop: 4, textAlign: "center", background: "#fdeaf3", color: "#c22168", border: "2px solid #f9bcd9", borderRadius: 999, padding: "5px 4px", fontWeight: 800, fontSize: 11, cursor: "pointer" }}>
+                          Photo
+                          <input
+                            type="file"
+                            accept="image/*"
+                            aria-label={`Upload a photo for ${v.name}`}
+                            style={{ display: "none" }}
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) onVariantPhoto(v.id, file);
+                            }}
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => removeVariant(v.id)}
+                          style={{ display: "block", width: "100%", marginTop: 4, background: "none", border: "none", color: "#8a3a61", fontWeight: 700, fontSize: 11, cursor: "pointer", textDecoration: "underline" }}
+                        >
+                          remove
+                        </button>
+                      </div>
+                    ))}
                 </div>
               </div>
             </div>

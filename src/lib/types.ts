@@ -21,6 +21,14 @@ export type Product = {
   sort_order: number;
 };
 
+export type ProductVariant = {
+  id: string;
+  product_id: string;
+  name: string;
+  photo_url: string | null;
+  sort_order: number;
+};
+
 export type FilamentColor = {
   id: string;
   name: string;
@@ -35,6 +43,7 @@ export type Order = {
   status: OrderStatus;
   product_name: string;
   size_label: string;
+  variant_name: string | null;
   qty: number;
   rush: boolean;
   resin: boolean;
