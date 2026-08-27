@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendNewOrderEmail } from "@/lib/email";
-import type { Order, OrderColor, Address } from "@/lib/types";
+import type { Order, OrderColor, Address, PaymentPreference } from "@/lib/types";
 
 export async function POST(request: Request) {
   const body = await request.json();
@@ -24,6 +24,8 @@ export async function POST(request: Request) {
   if (!productName || !customerName || !customerEmail) {
     return NextResponse.json({ error: "Missing required fields." }, { status: 400 });
   }
+
+  const paymentPreference: PaymentPreference | null = method === "pickup" && body.paymentPreference === "in_person" ? "in_person" : method === "pickup" ? "electronic" : null;
 
   let address: Address | null = null;
   if (method === "ship") {
@@ -55,6 +57,7 @@ export async function POST(request: Request) {
       customer_phone: customerPhone,
       method,
       address,
+      payment_preference: paymentPreference,
       notes,
       total,
     })

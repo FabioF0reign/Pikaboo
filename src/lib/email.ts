@@ -21,21 +21,40 @@ function cleanHandle(handle: string) {
   return handle.replace(/^[@$]/, "").trim();
 }
 
+// Formats a 10-digit US number like "4093007446" as "(409) 300-7446". Leaves
+// anything else (already formatted, non-US, etc.) alone.
+function formatPhone(phone: string) {
+  const digits = phone.replace(/\D/g, "");
+  if (digits.length !== 10) return phone;
+  return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+}
+
 function paymentLinksHtml(order: Order) {
   const amount = Math.round(Number(order.total) || 0);
+  const note = `Pikaboo order ${order.order_no}`;
   const links: { label: string; url: string; color: string }[] = [];
+  let anyWithoutNote = false;
+
+  const venmoHandle = process.env.VENMO_HANDLE;
+  if (venmoHandle) {
+    links.push({
+      label: "Pay with Venmo",
+      url: `https://venmo.com/?txn=pay&recipients=${cleanHandle(venmoHandle)}&amount=${amount}&note=${encodeURIComponent(note)}`,
+      color: "#3d95ce",
+    });
+  }
 
   const paypalHandle = process.env.PAYPAL_ME_HANDLE;
   if (paypalHandle) {
     links.push({ label: "Pay with PayPal", url: `https://paypal.me/${cleanHandle(paypalHandle)}/${amount}`, color: "#0070ba" });
+    anyWithoutNote = true;
   }
 
   const cashAppHandle = process.env.CASHAPP_CASHTAG;
   if (cashAppHandle) {
     links.push({ label: "Pay with Cash App", url: `https://cash.app/$${cleanHandle(cashAppHandle)}/${amount}`, color: "#00c244" });
+    anyWithoutNote = true;
   }
-
-  if (!links.length) return "";
 
   const buttons = links
     .map(
@@ -44,7 +63,24 @@ function paymentLinksHtml(order: Order) {
     )
     .join("");
 
-  return `<p>${buttons}</p><p style="font-size:13px;color:#666;">Neither app lets us pre-fill a note, so please add "${order.order_no}" as the note/message when you send it — that's how Genny will match your payment to your order.</p>`;
+  const zelleHandle = process.env.ZELLE_HANDLE;
+  const zelleLine = zelleHandle
+    ? `<p><b>Zelle:</b> send ${money(amount)} to <b>${zelleHandle}</b> from your banking app (Zelle doesn't support payment links, sorry!) — please note "${order.order_no}" so it's easy to match up.</p>`
+    : "";
+
+  const shopPhone = process.env.SHOP_PHONE;
+  const applePayLine =
+    process.env.OFFER_APPLE_PAY_NOTE !== "false" && shopPhone
+      ? `<p>Prefer Apple Cash? Text Genny at <b>${formatPhone(shopPhone)}</b> and she'll send you a request through Messages.</p>`
+      : "";
+
+  if (!links.length && !zelleLine && !applePayLine) return "";
+
+  const noteReminder = anyWithoutNote
+    ? `<p style="font-size:13px;color:#666;">PayPal and Cash App don't let us pre-fill a note, so please add "${order.order_no}" as the note/message when you send it.</p>`
+    : "";
+
+  return `${links.length ? `<p>${buttons}</p>` : ""}${zelleLine}${applePayLine}${noteReminder}`;
 }
 
 export async function sendNewOrderEmail(order: Order) {
@@ -70,6 +106,7 @@ export async function sendNewOrderEmail(order: Order) {
       <p><b>Colors</b><br>${colorLines || "none picked"}</p>
       <p><b>From</b><br>${order.customer_name}<br>${order.customer_email}<br>${order.customer_phone || ""}</p>
       <p><b>${order.method === "ship" ? "Ship to" : "Pickup"}</b><br>${addr}</p>
+      ${order.method === "pickup" ? `<p><b>Payment:</b> ${order.payment_preference === "in_person" ? "in person at pickup" : "electronic"}</p>` : ""}
       ${order.notes ? `<p><b>Notes</b><br>${order.notes}</p>` : ""}
       <p><b>Estimate:</b> ${money(order.total)}</p>
     `,
@@ -98,6 +135,11 @@ export async function sendOrderConfirmedEmail(order: Order) {
   const client = getClient();
   if (!client) return;
 
+  const payInPerson = order.method === "pickup" && order.payment_preference === "in_person";
+  const paymentSection = payInPerson
+    ? `<p>You chose to pay in person — nothing to do now, just bring cash, card, or whatever's easiest when you pick up.</p>`
+    : `${paymentLinksHtml(order)}`;
+
   await client.emails.send({
     from: FROM,
     to: order.customer_email,
@@ -106,7 +148,7 @@ export async function sendOrderConfirmedEmail(order: Order) {
       <h2>Your order is confirmed, ${order.customer_name}!</h2>
       <p>Genny has confirmed your order <b>${order.order_no}</b> — a <b>${order.product_name}</b> (${order.size_label}, qty ${order.qty}).</p>
       <p>Total due: <b>${money(order.total)}</b></p>
-      ${paymentLinksHtml(order)}
+      ${paymentSection}
       <p>Thanks for ordering from Pikaboo!</p>
     `,
   });

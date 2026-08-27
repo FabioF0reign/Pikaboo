@@ -1,4 +1,5 @@
 export type OrderStatus = "new" | "confirmed" | "printing" | "ready" | "done";
+export type PaymentPreference = "electronic" | "in_person";
 export type RequestStatus = "new" | "replied" | "added";
 
 export type OrderColor = { name: string; hex: string; note: string };
@@ -46,7 +47,19 @@ export type Order = {
   notes: string;
   total: number;
   tracking_number: string | null;
+  payment_preference: PaymentPreference | null;
   placed_at: string;
+};
+
+export type ShopSettings = {
+  resin_available: boolean;
+  default_shipping_rate: number;
+};
+
+export type ShippingRate = {
+  id: string;
+  state: string;
+  rate: number;
 };
 
 export type CustomRequest = {

@@ -9,8 +9,9 @@ import StudioHeader from "@/components/StudioHeader";
 import OrdersTab from "@/components/studio/OrdersTab";
 import IdeasTab from "@/components/studio/IdeasTab";
 import CatalogTab from "@/components/studio/CatalogTab";
+import ShippingTab from "@/components/studio/ShippingTab";
 
-type Tab = "orders" | "ideas" | "catalog";
+type Tab = "orders" | "ideas" | "catalog" | "shipping";
 
 export default function StudioDashboard() {
   const supabase = useMemo(() => createClient(), []);
@@ -46,6 +47,7 @@ export default function StudioDashboard() {
     { key: "orders", label: "Orders" },
     { key: "ideas", label: newIdeaCount ? `Ideas (${newIdeaCount})` : "Ideas" },
     { key: "catalog", label: "Prints & colors" },
+    { key: "shipping", label: "Shipping" },
   ];
 
   return (
@@ -108,6 +110,7 @@ export default function StudioDashboard() {
         {tab === "orders" && <OrdersTab />}
         {tab === "ideas" && <IdeasTab onAddedToMenu={() => setTab("catalog")} />}
         {tab === "catalog" && <CatalogTab />}
+        {tab === "shipping" && <ShippingTab />}
 
         <div style={{ textAlign: "center", fontSize: 12.5, color: "#6d1740", paddingTop: 4 }}>Orders and menu changes are saved to your Pikaboo database and sync across devices.</div>
       </div>

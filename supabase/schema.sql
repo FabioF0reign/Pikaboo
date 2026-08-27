@@ -53,13 +53,15 @@ create table if not exists orders (
   notes text not null default '',
   total numeric not null default 0,
   tracking_number text,
+  payment_preference text check (payment_preference in ('electronic', 'in_person')),
   placed_at timestamptz not null default now()
 );
 
 -- Safe to re-run against a database that already has the orders table from
--- an earlier version of this script (before tracking numbers / resin existed).
+-- an earlier version of this script (before tracking numbers / resin / payment preference existed).
 alter table orders add column if not exists tracking_number text;
 alter table orders add column if not exists resin boolean not null default false;
+alter table orders add column if not exists payment_preference text check (payment_preference in ('electronic', 'in_person'));
 
 create table if not exists custom_requests (
   id uuid primary key default gen_random_uuid(),
@@ -73,6 +75,24 @@ create table if not exists custom_requests (
   contact text not null,
   photo_url text,
   created_at timestamptz not null default now()
+);
+
+-- Single-row table for shop-wide on/off switches the admin controls from
+-- the Studio (e.g. temporarily hiding the resin add-on while out of stock).
+create table if not exists shop_settings (
+  id smallint primary key default 1 check (id = 1),
+  resin_available boolean not null default true,
+  default_shipping_rate numeric not null default 6 check (default_shipping_rate >= 0)
+);
+insert into shop_settings (id) values (1) on conflict (id) do nothing;
+alter table shop_settings add column if not exists default_shipping_rate numeric not null default 6;
+
+-- Per-state shipping overrides. A state not listed here falls back to
+-- shop_settings.default_shipping_rate.
+create table if not exists shipping_rates (
+  id uuid primary key default gen_random_uuid(),
+  state text not null unique,
+  rate numeric not null default 6 check (rate >= 0)
 );
 
 create index if not exists orders_status_idx on orders (status);
@@ -92,6 +112,8 @@ alter table products enable row level security;
 alter table colors enable row level security;
 alter table orders enable row level security;
 alter table custom_requests enable row level security;
+alter table shop_settings enable row level security;
+alter table shipping_rates enable row level security;
 
 drop policy if exists "products are publicly readable" on products;
 create policy "products are publicly readable" on products
@@ -119,6 +141,22 @@ create policy "admin manages orders" on orders
 
 drop policy if exists "admin manages custom_requests" on custom_requests;
 create policy "admin manages custom_requests" on custom_requests
+  for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
+
+drop policy if exists "shop settings are publicly readable" on shop_settings;
+create policy "shop settings are publicly readable" on shop_settings
+  for select using (true);
+
+drop policy if exists "admin manages shop settings" on shop_settings;
+create policy "admin manages shop settings" on shop_settings
+  for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
+
+drop policy if exists "shipping rates are publicly readable" on shipping_rates;
+create policy "shipping rates are publicly readable" on shipping_rates
+  for select using (true);
+
+drop policy if exists "admin manages shipping rates" on shipping_rates;
+create policy "admin manages shipping rates" on shipping_rates
   for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
 
 -- ---------------------------------------------------------------------------

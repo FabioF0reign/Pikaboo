@@ -186,6 +186,11 @@ export default function OrdersTab() {
                   <div style={{ fontSize: 11.5, fontWeight: 800, letterSpacing: ".05em", color: "#c22168" }}>{o.method === "ship" ? "SHIP TO" : "PICKUP"}</div>
                   <div style={{ fontSize: 13.5, color: "#8a3a61", marginTop: 3, lineHeight: 1.45 }}>{addressLine(o)}</div>
                   {o.method === "ship" && o.tracking_number && <div style={{ fontSize: 13.5, color: "#8a3a61", marginTop: 3 }}>Tracking: {o.tracking_number}</div>}
+                  {o.method === "pickup" && (
+                    <div style={{ fontSize: 13.5, fontWeight: 700, color: o.payment_preference === "in_person" ? "#5b3d00" : "#8a3a61", marginTop: 3 }}>
+                      {o.payment_preference === "in_person" ? "Wants to pay in person" : "Wants to pay electronically"}
+                    </div>
+                  )}
                 </div>
               </div>
 

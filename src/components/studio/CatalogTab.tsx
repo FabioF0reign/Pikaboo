@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { resizeImageToBlob, uploadPhoto } from "@/lib/image";
-import type { Product, FilamentColor } from "@/lib/types";
+import type { Product, FilamentColor, ShopSettings } from "@/lib/types";
 
 const smallInput: React.CSSProperties = { border: "3px solid #f9bcd9", borderRadius: 14, padding: "11px 13px", fontSize: 14, color: "#5a1c3a", background: "#fff7fa" };
 
@@ -11,15 +11,24 @@ export default function CatalogTab() {
   const supabase = useMemo(() => createClient(), []);
   const [products, setProducts] = useState<Product[]>([]);
   const [colors, setColors] = useState<FilamentColor[]>([]);
+  const [settings, setSettings] = useState<Pick<ShopSettings, "resin_available">>({ resin_available: true });
   const [uploadingId, setUploadingId] = useState<string | null>(null);
 
   async function load() {
-    const [{ data: p }, { data: c }] = await Promise.all([
+    const [{ data: p }, { data: c }, { data: s }] = await Promise.all([
       supabase.from("products").select("*").order("sort_order"),
       supabase.from("colors").select("*").order("sort_order"),
+      supabase.from("shop_settings").select("resin_available").eq("id", 1).single(),
     ]);
     setProducts(p || []);
     setColors(c || []);
+    if (s) setSettings(s);
+  }
+
+  async function toggleResin() {
+    const next = !settings.resin_available;
+    setSettings({ resin_available: next });
+    await supabase.from("shop_settings").update({ resin_available: next }).eq("id", 1);
   }
 
   useEffect(() => {
@@ -89,6 +98,25 @@ export default function CatalogTab() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <div style={{ background: "#fff7fa", border: "5px solid #ec3d84", borderRadius: 28, boxShadow: "0 7px 0 #f7a8cc", padding: "18px 16px" }}>
+        <h2 style={{ margin: 0, fontFamily: "'Baloo 2', sans-serif", fontWeight: 800, fontSize: 23, color: "#c22168" }}>Shop settings</h2>
+        <div style={{ display: "flex", alignItems: "center", gap: 11, background: "#fff", border: "3px solid #fbd6e7", borderRadius: 18, padding: "9px 11px", marginTop: 12, flexWrap: "wrap" }}>
+          <div>
+            <div style={{ fontWeight: 800, fontSize: 14.5 }}>Resin add-on</div>
+            <div style={{ fontSize: 12.5, color: "#8a3a61" }}>Turn off while you&apos;re out of resin — hides the option on the order form.</div>
+          </div>
+          <button
+            type="button"
+            onClick={toggleResin}
+            aria-pressed={settings.resin_available}
+            aria-label={settings.resin_available ? "Resin add-on is on, tap to turn off" : "Resin add-on is off, tap to turn on"}
+            style={{ marginLeft: "auto", flex: "none", background: settings.resin_available ? "#3a5119" : "#f1e4ea", color: settings.resin_available ? "#ffffff" : "#8a3a61", border: "none", borderRadius: 999, padding: "11px 16px", fontWeight: 800, fontSize: 13, cursor: "pointer", minHeight: 44, minWidth: 60 }}
+          >
+            {settings.resin_available ? "On" : "Off"}
+          </button>
+        </div>
+      </div>
+
       <div style={{ background: "#fff7fa", border: "5px solid #ec3d84", borderRadius: 28, boxShadow: "0 7px 0 #f7a8cc", padding: "18px 16px" }}>
         <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10 }}>
           <h2 style={{ margin: 0, fontFamily: "'Baloo 2', sans-serif", fontWeight: 800, fontSize: 23, color: "#c22168" }}>Prints on the menu</h2>

@@ -4,7 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { resizeImageToBlob, uploadPhoto } from "@/lib/image";
 import PageDecor from "@/components/PageDecor";
-import type { Product, FilamentColor, OrderColor } from "@/lib/types";
+import { US_STATES } from "@/lib/usStates";
+import type { Product, FilamentColor, OrderColor, ShippingRate } from "@/lib/types";
 
 const SIZES = [
   { key: "sm", label: "Small", note: "palm size · x1.0", mult: 1 },
@@ -19,7 +20,6 @@ const METHODS = [
 
 const RUSH_COST = 8;
 const RESIN_COST = 5;
-const SHIP_COST = 6;
 
 type Pick = { name: string; note: string };
 
@@ -77,6 +77,9 @@ export default function OrderForm() {
   const [products, setProducts] = useState<Product[]>([]);
   const [colors, setColors] = useState<FilamentColor[]>([]);
   const [catalogLoaded, setCatalogLoaded] = useState(false);
+  const [resinAvailable, setResinAvailable] = useState(true);
+  const [shippingRates, setShippingRates] = useState<ShippingRate[]>([]);
+  const [defaultShipRate, setDefaultShipRate] = useState(6);
 
   const [productId, setProductId] = useState("");
   const [picks, setPicks] = useState<Pick[]>([]);
@@ -85,6 +88,7 @@ export default function OrderForm() {
   const [rush, setRush] = useState(false);
   const [resin, setResin] = useState(false);
   const [method, setMethod] = useState<"ship" | "pickup">("ship");
+  const [paymentPreference, setPaymentPreference] = useState<"electronic" | "in_person">("electronic");
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -116,9 +120,11 @@ export default function OrderForm() {
 
   useEffect(() => {
     (async () => {
-      const [{ data: p }, { data: c }] = await Promise.all([
+      const [{ data: p }, { data: c }, { data: settings }, { data: rates }] = await Promise.all([
         supabase.from("products").select("*").order("sort_order"),
         supabase.from("colors").select("*").eq("available", true).order("sort_order"),
+        supabase.from("shop_settings").select("resin_available, default_shipping_rate").eq("id", 1).single(),
+        supabase.from("shipping_rates").select("*"),
       ]);
       const prods = p || [];
       const cols = c || [];
@@ -126,6 +132,11 @@ export default function OrderForm() {
       setColors(cols);
       if (prods.length) setProductId(prods[0].id);
       if (cols.length) setPicks([{ name: cols[0].name, note: "" }]);
+      const resinOn = settings ? settings.resin_available !== false : true;
+      setResinAvailable(resinOn);
+      if (!resinOn) setResin(false);
+      if (settings) setDefaultShipRate(Number(settings.default_shipping_rate));
+      setShippingRates(rates || []);
       setCatalogLoaded(true);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -134,14 +145,19 @@ export default function OrderForm() {
   const product = products.find((p) => p.id === productId) || products[0];
   const sizeInfo = SIZES.find((s) => s.key === size) || SIZES[0];
 
+  const shipCost = useMemo(() => {
+    if (method !== "ship") return 0;
+    const override = shippingRates.find((r) => r.state === stateName);
+    return Number(override ? override.rate : defaultShipRate);
+  }, [method, stateName, shippingRates, defaultShipRate]);
+
   const total = useMemo(() => {
     if (!product) return 0;
     const base = Number(product.price) * sizeInfo.mult * qty;
     const rushCost = rush ? RUSH_COST : 0;
     const resinCost = resin ? RESIN_COST : 0;
-    const shipCost = method === "ship" ? SHIP_COST : 0;
     return Math.round(base + rushCost + resinCost + shipCost);
-  }, [product, sizeInfo, qty, rush, resin, method]);
+  }, [product, sizeInfo, qty, rush, resin, shipCost]);
 
   function toggleColor(c: FilamentColor) {
     setPicks((prev) => (prev.some((p) => p.name === c.name) ? prev.filter((p) => p.name !== c.name) : prev.concat([{ name: c.name, note: "" }])));
@@ -178,6 +194,7 @@ export default function OrderForm() {
           customerPhone: phone,
           method,
           address: method === "ship" ? { street, street2, city, state: stateName, zip } : null,
+          paymentPreference: method === "pickup" ? paymentPreference : null,
           notes,
           total,
         }),
@@ -522,14 +539,16 @@ export default function OrderForm() {
                 >
                   Rush it · +${RUSH_COST} {rush ? "✓" : ""}
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setResin((r) => !r)}
-                  aria-pressed={resin}
-                  style={{ position: "relative", background: "#eef7ff", border: "3px solid #8fd4ff", borderRadius: 999, padding: "11px 18px", fontWeight: 800, fontSize: 14, color: "#1f6d96", cursor: "pointer" }}
-                >
-                  Resin · +${RESIN_COST} {resin ? "✓" : ""}
-                </button>
+                {resinAvailable && (
+                  <button
+                    type="button"
+                    onClick={() => setResin((r) => !r)}
+                    aria-pressed={resin}
+                    style={{ position: "relative", background: "#eef7ff", border: "3px solid #8fd4ff", borderRadius: 999, padding: "11px 18px", fontWeight: 800, fontSize: 14, color: "#1f6d96", cursor: "pointer" }}
+                  >
+                    Resin · +${RESIN_COST} {resin ? "✓" : ""}
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -571,6 +590,34 @@ export default function OrderForm() {
                 );
               })}
             </div>
+            {method === "pickup" && (
+              <div style={{ marginTop: 14, background: "#fff", border: "3px solid #fbd6e7", borderRadius: 20, padding: 14 }}>
+                <h3 style={{ margin: "0 0 10px", fontFamily: "'Baloo 2', sans-serif", fontWeight: 800, fontSize: 17 }}>How will you pay?</h3>
+                <div role="group" aria-label="How you'll pay" style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+                  {[
+                    { key: "electronic" as const, label: "Pay electronically" },
+                    { key: "in_person" as const, label: "Pay in person at pickup" },
+                  ].map((opt) => {
+                    const selected = paymentPreference === opt.key;
+                    return (
+                      <button
+                        key={opt.key}
+                        type="button"
+                        onClick={() => setPaymentPreference(opt.key)}
+                        aria-pressed={selected}
+                        style={{ position: "relative", background: "#fff7fa", border: "3px solid #f9bcd9", borderRadius: 999, padding: "11px 18px", fontWeight: 800, fontSize: 14, color: "#5a1c3a", cursor: "pointer" }}
+                      >
+                        {opt.label}
+                        {selected && <span style={{ position: "absolute", inset: -3, border: "4px solid #ec3d84", borderRadius: 999, pointerEvents: "none" }} />}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div style={{ fontSize: 12.5, color: "#8a3a61", marginTop: 9 }}>
+                  {paymentPreference === "electronic" ? "You'll get payment links once Genny confirms your order." : "Bring cash, card, or however you'd like to settle up when you pick up."}
+                </div>
+              </div>
+            )}
             {method === "ship" && (
               <div style={{ marginTop: 14, background: "#fff", border: "3px solid #fbd6e7", borderRadius: 20, padding: 14 }}>
                 <h3 style={{ margin: "0 0 10px", fontFamily: "'Baloo 2', sans-serif", fontWeight: 800, fontSize: 17 }}>Shipping address</h3>
@@ -579,11 +626,18 @@ export default function OrderForm() {
                   <input type="text" value={street2} onChange={(e) => setStreet2(e.target.value)} placeholder="Apt / unit (optional)" aria-label="Apartment or unit, optional" style={{ ...textInput, borderRadius: 14, padding: "12px 13px", fontSize: 15 }} />
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 10 }}>
                     <input type="text" value={city} onChange={(e) => setCity(e.target.value)} placeholder="City" aria-label="City" aria-required="true" autoComplete="address-level2" style={{ ...textInput, borderRadius: 14, padding: "12px 13px", fontSize: 15 }} />
-                    <input type="text" value={stateName} onChange={(e) => setStateName(e.target.value)} placeholder="State" aria-label="State" autoComplete="address-level1" style={{ ...textInput, borderRadius: 14, padding: "12px 13px", fontSize: 15 }} />
+                    <select value={stateName} onChange={(e) => setStateName(e.target.value)} aria-label="State" autoComplete="address-level1" style={{ ...textInput, borderRadius: 14, padding: "12px 13px", fontSize: 15 }}>
+                      <option value="">State</option>
+                      {US_STATES.map((s) => (
+                        <option key={s.code} value={s.code}>
+                          {s.name}
+                        </option>
+                      ))}
+                    </select>
                     <input type="text" value={zip} onChange={(e) => setZip(e.target.value)} placeholder="ZIP" aria-label="ZIP code" aria-required="true" inputMode="numeric" autoComplete="postal-code" style={{ ...textInput, borderRadius: 14, padding: "12px 13px", fontSize: 15 }} />
                   </div>
                 </div>
-                <div style={{ fontSize: 12.5, color: "#8a3a61", marginTop: 9 }}>Flat $6 shipping, tracked. Genny confirms before you pay.</div>
+                <div style={{ fontSize: 12.5, color: "#8a3a61", marginTop: 9 }}>Shipping is ${shipCost}, tracked. Genny confirms before you pay.</div>
               </div>
             )}
             <label style={{ ...fieldLabel, marginTop: 14 }}>
@@ -602,8 +656,9 @@ export default function OrderForm() {
                 { label: "Size", value: sizeInfo.label },
                 { label: "Quantity", value: String(qty) },
                 ...(resin ? [{ label: "Finish", value: `Resin · +$${RESIN_COST}` }] : []),
-                { label: "Delivery", value: METHODS.find((m) => m.key === method)!.label + (method === "ship" ? " · +$6" : "") + (rush ? " · rush" : "") },
+                { label: "Delivery", value: METHODS.find((m) => m.key === method)!.label + (method === "ship" ? ` · +$${shipCost}` : "") + (rush ? " · rush" : "") },
                 ...(method === "ship" ? [{ label: "Ship to", value: addrSummary || "add your address above" }] : []),
+                ...(method === "pickup" ? [{ label: "Payment", value: paymentPreference === "electronic" ? "Electronic" : "In person at pickup" }] : []),
               ].map((row) => (
                 <div key={row.label} style={{ display: "flex", gap: 12, alignItems: "baseline", borderBottom: "2px dashed rgba(255,255,255,.4)", paddingBottom: 7 }}>
                   <span style={{ fontSize: 13.5, fontWeight: 700 }}>{row.label}</span>
