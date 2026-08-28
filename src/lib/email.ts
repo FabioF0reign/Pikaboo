@@ -41,13 +41,33 @@ function escAttr(url: string) {
   return url.replace(/&/g, "&amp;");
 }
 
+// If the order's been claimed by a worker (Fabian or Thalia — see the claim
+// buttons in the Studio Orders tab), prefer that worker's own payment
+// handles so the customer pays whoever's actually making their order. Falls
+// back to the shop-wide handles when unclaimed or the worker hasn't set up
+// their own handle for that method.
+function workerPrefix(order: Order): "FABIAN" | "THALIA" | null {
+  if (order.assigned_to === "Fabian") return "FABIAN";
+  if (order.assigned_to === "Thalia") return "THALIA";
+  return null;
+}
+
+function pickEnv(order: Order, suffix: string, fallbackName: string) {
+  const prefix = workerPrefix(order);
+  if (prefix) {
+    const v = process.env[`${prefix}_${suffix}`];
+    if (v) return v;
+  }
+  return process.env[fallbackName];
+}
+
 function paymentLinksHtml(order: Order) {
   const amount = Math.round(Number(order.total) || 0);
   const note = `Pikaboo order ${order.order_no}`;
   const links: { label: string; url: string; color: string }[] = [];
   let anyWithoutNote = false;
 
-  const venmoHandle = process.env.VENMO_HANDLE;
+  const venmoHandle = pickEnv(order, "VENMO_HANDLE", "VENMO_HANDLE");
   if (venmoHandle) {
     links.push({
       label: "Pay with Venmo",
@@ -56,13 +76,13 @@ function paymentLinksHtml(order: Order) {
     });
   }
 
-  const paypalHandle = process.env.PAYPAL_ME_HANDLE;
+  const paypalHandle = pickEnv(order, "PAYPAL_ME_HANDLE", "PAYPAL_ME_HANDLE");
   if (paypalHandle) {
     links.push({ label: "Pay with PayPal", url: `https://paypal.me/${cleanHandle(paypalHandle)}/${amount}`, color: "#0070ba" });
     anyWithoutNote = true;
   }
 
-  const cashAppHandle = process.env.CASHAPP_CASHTAG;
+  const cashAppHandle = pickEnv(order, "CASHAPP_CASHTAG", "CASHAPP_CASHTAG");
   if (cashAppHandle) {
     links.push({ label: "Pay with Cash App", url: `https://cash.app/$${cleanHandle(cashAppHandle)}/${amount}`, color: "#00c244" });
     anyWithoutNote = true;
@@ -75,15 +95,16 @@ function paymentLinksHtml(order: Order) {
     )
     .join("");
 
-  const zelleHandle = process.env.ZELLE_HANDLE;
+  const zelleHandle = pickEnv(order, "ZELLE_HANDLE", "ZELLE_HANDLE");
   const zelleLine = zelleHandle
     ? `<p><b>Zelle:</b> send ${money(amount)} to <b>${zelleHandle}</b> from your banking app (Zelle doesn't support payment links, sorry!) — please note "${order.order_no}" so it's easy to match up.</p>`
     : "";
 
-  const shopPhone = process.env.SHOP_PHONE;
+  const contactName = workerPrefix(order) ? order.assigned_to! : "Genny";
+  const shopPhone = pickEnv(order, "PHONE", "SHOP_PHONE");
   const applePayLine =
     process.env.OFFER_APPLE_PAY_NOTE !== "false" && shopPhone
-      ? `<p>Prefer Apple Cash? <a href="sms:${shopPhone.replace(/\D/g, "")}" style="color:#3d95ce;font-weight:bold;">Text Genny at ${formatPhone(shopPhone)}</a> and she'll send you a request through Messages.</p>`
+      ? `<p>Prefer Apple Cash? <a href="sms:${shopPhone.replace(/\D/g, "")}" style="color:#3d95ce;font-weight:bold;">Text ${contactName} at ${formatPhone(shopPhone)}</a> and they'll send you a request through Messages.</p>`
       : "";
 
   if (!links.length && !zelleLine && !applePayLine) return "";

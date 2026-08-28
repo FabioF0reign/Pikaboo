@@ -89,6 +89,7 @@ This replaces the "upload files to GoDaddy File Manager" plan discussed earlier 
 - **"Load sample orders" and "Reset to defaults" were removed.** Those were demo helpers for the prototype; seeding fake orders or wiping your real catalog isn't something you want on a live store. Ask if you'd like either brought back as an admin-only tool.
 - **Payment links, not checkout.** "Send my order" still just saves the order and emails you — nothing is charged automatically. But once you hit "Confirm order," the email to the customer includes tap-to-pay Venmo, PayPal, and Cash App links pre-filled with the total, a Zelle number to send to, and a line asking Apple Cash payers to text you. Real in-site card checkout (Stripe) is still a separate project — say the word if you want that next.
 - **Shipping price varies by state.** Set a default flat rate plus per-state overrides from the Studio's **Shipping** tab — customers see the right price the moment they pick their state, before submitting.
+- **Per-worker payment handles.** If an order's been claimed by Fabian or Thalia (the claim buttons on an order card, so two people don't print the same thing) before you hit "Confirm order," the payment email uses that worker's own Venmo/PayPal/Cash App/Zelle/phone if you've set them (`FABIAN_VENMO_HANDLE`, `THALIA_CASHAPP_CASHTAG`, etc. — see `.env.local.example`), so the customer pays the right person directly. Unclaimed orders, or handles you haven't set for that worker, fall back to the shop-wide ones.
 
 ## Costs
 
