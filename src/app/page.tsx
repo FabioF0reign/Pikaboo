@@ -20,7 +20,7 @@ const METHODS = [
 ] as const;
 
 const RUSH_COST = 8;
-const RESIN_COST = 8;
+const RESIN_COST = 10;
 
 type Pick = { name: string; note: string };
 
